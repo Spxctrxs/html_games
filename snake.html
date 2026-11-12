@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head> 
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+        <title>Snake</title>
+        <style>
+            * {
+                box-sizing: border-box;
+            }
+
+            body {
+                background-color: #1a1a1a;
+                color: #ffffff;
+                font-family: Georgia, 'Times New Roman', Times, serif;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                margin: 0;
+                padding: 16px;
+                text-align: center;
+            }
+
+            h1 {
+                margin: 0 0 10px;
+                font-size: 25px;
+            }
+
+            #scoreBoard {
+                font-size: 20px;
+                margin-bottom: 12px;
+            }
+
+            canvas {
+                display: block;
+                width: min(400px, 90vw);
+                height: auto;
+                background-color: #000000;
+                border: 3px solid #4caf50;
+                box-shadow: 0 0 15px rgba(76, 175, 80, 0.35);
+                touch-action: none;
+            }
+
+            p {
+                margin-top: 15px;
+                color: #aaaaaa;
+                font-size: 14px;
+            }
+
+            .touch-controls {
+                display: grid;
+                grid-template-columns: repeat(3, 64px);
+                grid-template-rows: repeat(2, 56px);
+                gap: 8px;
+                margin-top: 16px;
+                touch-action: manipulation;
+                user-select: none;
+            }
+
+            .touch-controls button {
+                border: 1px solid #4caf50;
+                border-radius: 10px;
+                background: #262626;
+                color: #ffffff;
+                font: bold 24px Georgia, 'Times New Roman', Times, serif;
+                cursor: pointer;
+                touch-action: manipulation;
+            }
+
+            .touch-controls button:active {
+                background: #367c39;
+            }
+
+            .touch-controls [data-direction="up"] {
+                grid-column: 2;
+                grid-row: 1;
+            }
+
+            .touch-controls [data-direction="left"] {
+                grid-column: 1;
+                grid-row: 2;
+            }
+
+            .touch-controls [data-direction="down"] {
+                grid-column: 2;
+                grid-row: 2;
+            }
+
+            .touch-controls [data-direction="right"] {
+                grid-column: 3;
+                grid-row: 2;
+            }
+
+            @media (min-width: 700px) and (hover: hover) {
+                .touch-controls {
+                    display: none;
+                }
+            }
+        </style>
+    </head>
+    
+    <body>
+        <h1>Snake</h1>
+        <div id="scoreBoard">Score: <span id="score">0</span></div>
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+        <p>Use the <strong>Arrow Keys</strong> or swipe to move.
+        Press <strong>Space</strong> or tap a direction to restart after Game Over.</p>
+        <div class="touch-controls" aria-label="Touch controls">
+            <button type="button" data-direction="up" aria-label="Move up">↑</button>
+            <button type="button" data-direction="left" aria-label="Move left">←</button>
+            <button type="button" data-direction="down" aria-label="Move down">↓</button>
+            <button type="button" data-direction="right" aria-label="Move right">→</button>
+        </div>
+
+        <script>
+            const canvas = document.getElementById("gameCanvas");
+            const ctx = canvas.getContext("2d");
+            const scoreElement = document.getElementById("score");
+
+            const gridSize = 20;
+            const tileCount = canvas.width / gridSize;
+            const startingGameSpeed = 150;
+            const speedIncreasePerLevel = 10;
+            const minimumGameSpeed = 60;
+
+            let snake = [];
+            let food = { x: 0, y: 0 };
+            let dx = 0;
+            let dy = 0;
+            let score = 0;
+            let gameOver = false;
+            let changingDirection = false;
+            let gameLoopTimeout;
+
+            function initGame() {
+                snake = [
+                    { x: 10, y: 10 },
+                    { x: 9, y: 10 },
+                    { x: 8, y: 10 },
+                ];
+                dx = 1;
+                dy = 0;
+                score = 0;
+                gameOver = false;
+                changingDirection = false;
+                scoreElement.textContent = score;
+                spawnFood();
+                clearTimeout(gameLoopTimeout);
+                render();
+                gameLoopTimeout = setTimeout(gameTick, getGameSpeed());
+            }
+
+            function getGameSpeed() {
+                const speedLevel = Math.floor(score / 100);
+                return Math.max(minimumGameSpeed, startingGameSpeed - speedLevel * speedIncreasePerLevel);
+            }
+
+            function gameTick() {
+                if (gameOver) return;
+                changingDirection = false;
+                moveSnake();
+                render();
+                if (!gameOver) gameLoopTimeout = setTimeout(gameTick, getGameSpeed());
+            }
+
+            function render() {
+                clearCanvas();
+                drawFood();
+                drawSnake();
+                if (gameOver) drawGameOver();
+            }
+
+            function clearCanvas() {
+                ctx.fillStyle = "#000000";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            function drawSnake() {
+                snake.forEach((part, index) => {
+                    ctx.fillStyle = index === 0 ? "#66bb6a" : "#4caf50";
+                    ctx.strokeStyle = "#1a1a1a";
+                    ctx.fillRect(part.x * gridSize, part.y * gridSize, gridSize, gridSize);
+                    ctx.strokeRect(part.x * gridSize, part.y * gridSize, gridSize, gridSize);
+                });
+            }
+
+            function drawFood() {
+                ctx.fillStyle = "#f44336";
+                ctx.fillRect(food.x * gridSize + 2, food.y * gridSize + 2, gridSize - 4, gridSize - 4);
+            }
+
+            function moveSnake() {
+                const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+                const eating = head.x === food.x && head.y === food.y;
+
+                if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+                    gameOver = true;
+                    return;
+                }
+
+                const bodyToCheck = eating ? snake : snake.slice(0, -1);
+                if (bodyToCheck.some(part => part.x === head.x && part.y === head.y)) {
+                    gameOver = true;
+                    return;
+                }
+
+                snake.unshift(head);
+
+                if (eating) {
+                    score += 10;
+                    scoreElement.textContent = score;
+                    spawnFood();
+                } else {
+                    snake.pop();
+                }
+            }
+
+            function spawnFood() {
+                const availableTiles = [];
+                for (let x = 0; x < tileCount; x++) {
+                    for (let y = 0; y < tileCount; y++) {
+                        if (!snake.some(part => part.x === x && part.y === y)) {
+                            availableTiles.push({ x, y });
+                        }
+                    }
+                }
+
+                if (availableTiles.length === 0) {
+                    gameOver = true;
+                    return;
+                }
+                food = availableTiles[Math.floor(Math.random() * availableTiles.length)];
+            }
+
+            function drawGameOver() {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "bold 32px Georgia";
+                ctx.textAlign = "center";
+                ctx.fillText("Game Over!", canvas.width / 2, canvas.height / 2 - 10);
+
+                ctx.font = "16px Georgia";
+                ctx.fillText("Press Space or tap a direction", canvas.width / 2, canvas.height / 2 + 25);
+            }
+
+            function changeDirection(direction) {
+                if (gameOver) {
+                    initGame();
+                }
+                if (changingDirection) return;
+
+                const directions = {
+                    left: { x: -1, y: 0 },
+                    up: { x: 0, y: -1 },
+                    right: { x: 1, y: 0 },
+                    down: { x: 0, y: 1 },
+                };
+                const next = directions[direction];
+                if (!next || (next.x === -dx && next.y === -dy)) return;
+                dx = next.x;
+                dy = next.y;
+                changingDirection = true;
+            }
+
+            document.addEventListener("keydown", event => {
+                const keyDirections = {
+                    ArrowLeft: "left",
+                    ArrowUp: "up",
+                    ArrowRight: "right",
+                    ArrowDown: "down",
+                };
+
+                if (event.code === "Space" && gameOver) {
+                    event.preventDefault();
+                    initGame();
+                } else if (keyDirections[event.key]) {
+                    event.preventDefault();
+                    changeDirection(keyDirections[event.key]);
+                }
+            });
+
+            document.querySelectorAll(".touch-controls button").forEach(button => {
+                button.addEventListener("pointerdown", event => {
+                    event.preventDefault();
+                    changeDirection(button.dataset.direction);
+                });
+            });
+
+            let swipeStart = null;
+            canvas.addEventListener("pointerdown", event => {
+                swipeStart = { x: event.clientX, y: event.clientY };
+            });
+            canvas.addEventListener("pointerup", event => {
+                if (!swipeStart) return;
+                const deltaX = event.clientX - swipeStart.x;
+                const deltaY = event.clientY - swipeStart.y;
+                swipeStart = null;
+                if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < 20) return;
+                if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                    changeDirection(deltaX > 0 ? "right" : "left");
+                } else {
+                    changeDirection(deltaY > 0 ? "down" : "up");
+                }
+            });
+            canvas.addEventListener("pointercancel", () => {
+                swipeStart = null;
+            });
+
+            initGame();
+        </script>
+        
+    </body>
+</html>
