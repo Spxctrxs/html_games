@@ -1,6 +1,6 @@
 # Snake
 
-A classic Snake game built with HTML, CSS, and vanilla JavaScript. No dependencies or build tools are required.
+A classic Snake game built with HTML, CSS, and vanilla JavaScript.
 
 ## Play
 
